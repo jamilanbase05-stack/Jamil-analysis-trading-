@@ -1,0 +1,41 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare web folder
+        run: |
+          mkdir -p www
+          echo "Files in repository:"
+          find . -path ./.git -prune -o -type f -print | head -50
+          h=$(find . -path ./www -prune -o -path ./.git -prune -o -name "*.html" -print | head -n 1)
+          if [ -z "$h" ]; then
+            echo "ERROR: No .html file found. Upload index.html to the repository."
+            exit 1
+          fi
+          echo "Using: $h"
+          cp "$h" www/index.html
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Create Capacitor project
+        run: |
+          [ -f package.json ] || npm init -y
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+          echo '{"appId":"com.jamilanbase.tradelens","appName":"TradeLens","webDir":"www","plugins":{"CapacitorHttp":{"enabled":true}}}' > capacitor.config.json
+          npx cap add android
+          npx cap sync android
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tradelens-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
